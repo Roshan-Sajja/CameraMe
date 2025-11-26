@@ -4,6 +4,10 @@ build/
 DerivedData/
 *.xcuserstate
 *.xcworkspace/xcuserdata
+*.xcodeproj/xcuserdata/
+xcuserdata/
+*.xcuserdatad
+*/xcshareddata/IDEWorkspaceChecks.plist
 *.xcscmblueprint
 *.xccheckout
 
