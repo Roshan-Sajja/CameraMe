@@ -1,4 +1,5 @@
 import Combine
+import Foundation
 
 extension Publisher {
     /// Helper to ensure downstream receives values on the main queue.

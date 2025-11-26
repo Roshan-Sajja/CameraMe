@@ -3,7 +3,7 @@
 Voice-activated countdown camera proof-of-concept for iOS. The app will idle in a listening state, react to a configurable keyword (default: "camera me"), play a countdown animation with audible cues, then capture and store a photo using the selected camera.
 
 ## Current Status
-- ✅ Repo initialized with base directory structure and documentation stubs
+- ✅ Repo initialized with base directory structure, documentation stubs, and a runnable SwiftUI Xcode project (`VoiceCameraApp.xcodeproj`)
 - 🔜 Implement microphone + speech trigger pipeline
 - 🔜 Wire up camera preview, capture pipeline, and countdown UX
 - 🔜 Add assets (beeps + shutter), permissions copy, and run-book instructions
@@ -24,20 +24,19 @@ Sources/
   Countdown/      # Animation + audio feedback components
   Extensions/     # Cross-cutting utilities / shared helpers
 Resources/
-  Assets/         # Media assets, e.g., shutter/beep sounds, icons
-  Sounds/
+  Assets.xcassets # App icon + accent color (ready for additional assets)
+  Sounds/         # Audio cues for countdown + shutter
 Config/            # Environment, entitlement, and credential templates
 Docs/              # Assignment brief, architecture notes, and run book
 ```
 
-## Getting Started (once implementation lands)
-1. Open the upcoming Xcode project/workspace once committed.
-2. Update the bundle identifier + signing team for your developer account.
-3. Run on a real device (required for mic/camera access) to grant permissions.
-4. Speak "camera me" (or a custom trigger) and verify countdown + capture.
+## Getting Started (current scaffolding)
+1. Open `VoiceCameraApp.xcodeproj` in Xcode 15+.
+2. Update the bundle identifier + signing team under *Signing & Capabilities* once developer credentials arrive.
+3. Select a physical device target (mic/camera permissions only work on device) and build/run.
+4. You should see the placeholder SwiftUI screen; speech, countdown, and capture flows are upcoming.
 
 ## Next Steps
-- Scaffold the actual Xcode project with SwiftUI + AVFoundation targets.
 - Implement the speech trigger service using `AVAudioEngine` + `SFSpeechRecognizer`.
 - Build countdown animation + audio feedback and integrate with camera capture.
 - Add photo library save flow + permission prompts.
