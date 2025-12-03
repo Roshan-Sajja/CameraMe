@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LensSelectorView: View {
     @ObservedObject var cameraController: CameraController
+    let controlRotation: Angle
     
     @State private var selectedIndex: Int = 0
     @State private var isVisible = false
@@ -12,7 +13,8 @@ struct LensSelectorView: View {
                 LensButton(
                     lens: lens,
                     isSelected: cameraController.currentLens == lens,
-                    index: index
+                    index: index,
+                    controlRotation: controlRotation
                 ) {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
                         cameraController.switchLens(lens)
@@ -44,6 +46,7 @@ struct LensButton: View {
     let lens: CameraLens
     let isSelected: Bool
     let index: Int
+    let controlRotation: Angle
     let action: () -> Void
     
     @State private var isPressed = false
@@ -62,6 +65,8 @@ struct LensButton: View {
             .scaleEffect(isPressed ? 0.9 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
+        .rotationEffect(controlRotation)
+        .animation(.easeInOut(duration: 0.25), value: controlRotation)
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in
@@ -84,6 +89,9 @@ struct LensButton: View {
 #Preview {
     ZStack {
         Color.black
-        LensSelectorView(cameraController: CameraController())
+        LensSelectorView(
+            cameraController: CameraController(),
+            controlRotation: .zero
+        )
     }
 }

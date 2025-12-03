@@ -1,96 +1,31 @@
-import AVFoundation
-import AVFAudio
 import Combine
 import Foundation
-import Speech
-
-enum VoicePermissionStatus: Equatable {
-    case unknown
-    case notDetermined
-    case granted
-    case denied
-    case restricted
-
-    var isGranted: Bool {
-        self == .granted
-    }
-
-    var requiresSystemSettings: Bool {
-        switch self {
-        case .denied, .restricted:
-            return true
-        default:
-            return false
-        }
-    }
-
-    var isRequestable: Bool {
-        self == .notDetermined
-    }
-}
-
-extension VoicePermissionStatus {
-    init(speechStatus: SFSpeechRecognizerAuthorizationStatus) {
-        switch speechStatus {
-        case .authorized:
-            self = .granted
-        case .denied:
-            self = .denied
-        case .restricted:
-            self = .restricted
-        case .notDetermined:
-            self = .notDetermined
-        @unknown default:
-            self = .unknown
-        }
-    }
-
-    init(recordPermission: AVAudioSession.RecordPermission) {
-        switch recordPermission {
-        case .granted:
-            self = .granted
-        case .denied:
-            self = .denied
-        case .undetermined:
-            self = .notDetermined
-        @unknown default:
-            self = .unknown
-        }
-    }
-
-    @available(iOS 17.0, *)
-    init(appRecordPermission: AVAudioApplication.recordPermission) {
-        switch appRecordPermission {
-        case .granted:
-            self = .granted
-        case .denied:
-            self = .denied
-        case .undetermined:
-            self = .notDetermined
-        @unknown default:
-            self = .unknown
-        }
-    }
-}
 
 final class VoiceTriggerViewModel: ObservableObject {
-    @Published var triggerPhrase: String
+    @Published var triggerPhrase: String {
+        didSet {
+            UserDefaults.standard.set(triggerPhrase, forKey: "trigger_phrase")
+        }
+    }
     @Published var statusMessage: String = "Idle"
     @Published var isListening = false
     @Published var lastTriggerDescription: String?
     @Published var lastTranscription: String?
-    @Published var isTestingMode = false  // When true, triggers won't capture photos
+    @Published var isTestingMode = false
     @Published var errorMessage: String?
     @Published private(set) var speechPermissionStatus: VoicePermissionStatus = .unknown
     @Published private(set) var microphonePermissionStatus: VoicePermissionStatus = .unknown
+    @Published var audioInputs: [AudioInputSource] = []
+    @Published var selectedAudioInputID: String?
 
     private let service: VoiceTriggerService
     private let defaultTriggerPhrase: String
     private var cancellables = Set<AnyCancellable>()
     private let workerQueue = DispatchQueue(label: "VoiceTriggerViewModel.Worker")
     private var pendingAutoStart = false
-    private var isRequestingSpeechPermission = false
-    private var isRequestingMicrophonePermission = false
+    private var autoStartRetryCount = 0
+    private let maxAutoStartRetries = 3
+    private var autoStartRetryWorkItem: DispatchWorkItem?
 
     private lazy var dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -113,14 +48,17 @@ final class VoiceTriggerViewModel: ObservableObject {
 
     init(service: VoiceTriggerService? = nil, defaultTriggerPhrase: String = "camera me") {
         self.defaultTriggerPhrase = defaultTriggerPhrase
-        self.triggerPhrase = defaultTriggerPhrase
+        
+        let savedPhrase = UserDefaults.standard.string(forKey: "trigger_phrase")
+        let initialPhrase = savedPhrase ?? defaultTriggerPhrase
+        self.triggerPhrase = initialPhrase
 
         let resolvedService: VoiceTriggerService
         var initializationError: String?
 
         if let service {
             resolvedService = service
-        } else if let speechService = try? SpeechVoiceTriggerService(initialTriggerPhrase: defaultTriggerPhrase) {
+        } else if let speechService = try? SpeechVoiceTriggerService(initialTriggerPhrase: initialPhrase) {
             resolvedService = speechService
         } else {
             resolvedService = DisabledVoiceTriggerService()
@@ -130,10 +68,12 @@ final class VoiceTriggerViewModel: ObservableObject {
         self.service = resolvedService
         self.errorMessage = initializationError
 
-        refreshPermissions()
         bindTriggerStream()
         bindServiceEvents()
         bindTranscriptionStream()
+        bindPermissionStream()
+        bindAudioRouteStream()
+        refreshPermissions()
         propagateTriggerPhraseChange()
     }
 
@@ -141,8 +81,12 @@ final class VoiceTriggerViewModel: ObservableObject {
         service.stopListening()
     }
 
-    func startListening() {
-        guard !isListening else { return }
+    func startListening(force: Bool = false) {
+        guard force || !isListening else {
+            return
+        }
+
+        service.refreshPermissions()
 
         guard canStartListening else {
             pendingAutoStart = true
@@ -168,17 +112,22 @@ final class VoiceTriggerViewModel: ObservableObject {
             do {
                 try self.service.startListening()
             } catch {
+                self.autoStartRetryWorkItem?.cancel()
                 DispatchQueue.main.async {
                     self.errorMessage = self.userMessage(for: error)
                     self.statusMessage = "Listener inactive"
                 }
             }
         }
+
+        scheduleAutoStartRetry()
     }
 
     func stopListening() {
         guard isListening else { return }
         pendingAutoStart = false
+        autoStartRetryWorkItem?.cancel()
+        autoStartRetryCount = 0
 
         workerQueue.async { [weak self] in
             guard let self else { return }
@@ -189,57 +138,41 @@ final class VoiceTriggerViewModel: ObservableObject {
     func toggleListening() {
         isListening ? stopListening() : startListening()
     }
+    func restartListening() {
+        // Allow stop to complete before starting again.
+        stopListening()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.startListening(force: true)
+        }
+    }
 
     func handleTriggerPhraseChange() {
         propagateTriggerPhraseChange()
     }
 
     func refreshPermissions() {
-        speechPermissionStatus = Self.currentSpeechPermissionStatus()
-        microphonePermissionStatus = Self.currentMicrophonePermissionStatus()
+        let micStatus = VoicePermissionReader.currentMicrophonePermissionStatus()
+        let speechStatus = VoicePermissionReader.currentSpeechPermissionStatus()
+
+        microphonePermissionStatus = micStatus
+        speechPermissionStatus = speechStatus
         handlePermissionStateChange()
+        service.refreshPermissions()
     }
 
-    func requestSpeechPermission() {
-        guard speechPermissionStatus.isRequestable, !isRequestingSpeechPermission else { return }
-        isRequestingSpeechPermission = true
-
-        SFSpeechRecognizer.requestAuthorization { [weak self] status in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.isRequestingSpeechPermission = false
-                self.speechPermissionStatus = VoicePermissionStatus(speechStatus: status)
-                self.handlePermissionStateChange()
-            }
-        }
+    func requestPermissionsIfNeeded() {
+        service.requestPermissionsIfNeeded()
     }
 
-    func requestMicrophonePermission() {
-        guard microphonePermissionStatus.isRequestable, !isRequestingMicrophonePermission else { return }
-        isRequestingMicrophonePermission = true
+    func refreshAudioInputs() {
+        service.selectPreferredInput(id: selectedAudioInputID)
+    }
 
-        let completion: (Bool) -> Void = { [weak self] granted in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.isRequestingMicrophonePermission = false
-                self.microphonePermissionStatus = granted ? .granted : .denied
-                self.handlePermissionStateChange()
-            }
-        }
-
-        if #available(iOS 17, *) {
-            AVAudioApplication.requestRecordPermission { allowed in
-                completion(allowed)
-            }
-        } else {
-            AVAudioSession.sharedInstance().requestRecordPermission { allowed in
-                completion(allowed)
-            }
-        }
+    func selectAudioInput(id: String?) {
+        selectedAudioInputID = id
+        service.selectPreferredInput(id: id)
     }
 }
-
-// MARK: - Private helpers
 
 private extension VoiceTriggerViewModel {
     var listeningStatusMessage: String {
@@ -256,27 +189,6 @@ private extension VoiceTriggerViewModel {
             return "Enable microphone permission to start listening."
         default:
             return "Enable speech recognition and microphone permissions to start listening."
-        }
-    }
-
-    static func currentSpeechPermissionStatus() -> VoicePermissionStatus {
-        VoicePermissionStatus(speechStatus: SFSpeechRecognizer.authorizationStatus())
-    }
-
-    static func currentMicrophonePermissionStatus() -> VoicePermissionStatus {
-        if #available(iOS 17, *) {
-            return VoicePermissionStatus(appRecordPermission: AVAudioApplication.shared.recordPermission)
-        } else {
-            return VoicePermissionStatus(recordPermission: AVAudioSession.sharedInstance().recordPermission)
-        }
-    }
-
-    func requestPermissionsIfNeeded() {
-        if speechPermissionStatus.isRequestable {
-            requestSpeechPermission()
-        }
-        if microphonePermissionStatus.isRequestable {
-            requestMicrophonePermission()
         }
     }
 
@@ -325,6 +237,39 @@ private extension VoiceTriggerViewModel {
             .store(in: &cancellables)
     }
 
+    func bindPermissionStream() {
+        service.permissionPublisher
+            .receiveOnMain()
+            .sink { [weak self] snapshot in
+                guard let self else { return }
+                self.microphonePermissionStatus = snapshot.microphone
+                self.speechPermissionStatus = snapshot.speech
+                self.handlePermissionStateChange()
+            }
+            .store(in: &cancellables)
+    }
+
+    func bindAudioRouteStream() {
+        service.audioRoutePublisher
+            .receiveOnMain()
+            .sink { [weak self] inputs in
+                guard let self else { return }
+                self.audioInputs = inputs
+
+                if let selectedAudioInputID,
+                   inputs.contains(where: { $0.id == selectedAudioInputID }) {
+                    return
+                }
+
+                if let activeInput = inputs.first(where: { $0.isCurrent }) {
+                    self.selectedAudioInputID = activeInput.id
+                } else if let first = inputs.first {
+                    self.selectedAudioInputID = first.id
+                }
+            }
+            .store(in: &cancellables)
+    }
+
     func handleTriggerEvent() {
         let timestamp = dateFormatter.string(from: Date())
         lastTriggerDescription = timestamp
@@ -342,17 +287,15 @@ private extension VoiceTriggerViewModel {
             isListening = true
             errorMessage = nil
             statusMessage = listeningStatusMessage
+            autoStartRetryWorkItem?.cancel()
+            autoStartRetryCount = 0
         case .stopped:
             isListening = false
             statusMessage = "Listener paused"
         case .failure(let error):
-            // Don't set isListening = false on transient errors like "No speech detected"
-            // The service auto-restarts and will send .started again
-            // Only log for debugging, don't update UI state to avoid flickering
             #if DEBUG
             print("Voice trigger transient error (will auto-restart): \(error.localizedDescription)")
             #endif
-            // Only show error message if it's not a common transient error
             let errorDesc = error.localizedDescription.lowercased()
             if !errorDesc.contains("no speech") && !errorDesc.contains("speech detected") {
                 errorMessage = userMessage(for: error)
@@ -367,7 +310,6 @@ private extension VoiceTriggerViewModel {
 
         if normalized != triggerPhrase {
             triggerPhrase = normalized
-            return
         }
 
         service.updateTriggerPhrase(normalized)
@@ -384,5 +326,22 @@ private extension VoiceTriggerViewModel {
 
         let description = error.localizedDescription
         return description.isEmpty ? "Something went wrong while starting the listener." : description
+    }
+
+    func scheduleAutoStartRetry() {
+        autoStartRetryWorkItem?.cancel()
+        guard autoStartRetryCount < maxAutoStartRetries else { return }
+
+        autoStartRetryCount += 1
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard !self.isListening else { return }
+            guard self.canStartListening else { return }
+            self.startListening()
+        }
+
+        autoStartRetryWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: workItem)
     }
 }

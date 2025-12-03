@@ -9,19 +9,6 @@ final class PermissionManager: ObservableObject {
     @Published var speechStatus: VoicePermissionStatus = .notDetermined
     @Published var photoLibraryStatus: PHAuthorizationStatus = .notDetermined
     
-    var allPermissionsGranted: Bool {
-        cameraStatus == .authorized && microphoneStatus.isGranted && speechStatus.isGranted
-    }
-    
-    var canSavePhotos: Bool {
-        photoLibraryStatus == .authorized || photoLibraryStatus == .limited
-    }
-    
-    var anyPermissionDenied: Bool {
-        cameraStatus == .denied || cameraStatus == .restricted ||
-        microphoneStatus.requiresSystemSettings || speechStatus.requiresSystemSettings
-    }
-    
     func checkPermissions() {
         cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
         
@@ -35,10 +22,11 @@ final class PermissionManager: ObservableObject {
         photoLibraryStatus = PHPhotoLibrary.authorizationStatus(for: .addOnly)
     }
     
-    func requestCameraPermission() {
+    func requestCameraPermission(completion: ((Bool) -> Void)? = nil) {
         AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
             DispatchQueue.main.async {
                 self?.cameraStatus = granted ? .authorized : .denied
+                completion?(granted)
             }
         }
     }
@@ -85,4 +73,3 @@ final class PermissionManager: ObservableObject {
         requestPhotoLibraryPermission { _ in }
     }
 }
-

@@ -37,25 +37,10 @@ struct GridOverlay: View {
     }
     
     private func calculateVisibleRect(screenWidth: CGFloat, screenHeight: CGFloat) -> CGRect {
-        switch aspectRatio {
-        case .ratio4x3:
-            // 4:3 (3 wide x 4 tall in portrait) - fills width, centered vertically
-            let visibleHeight = screenWidth * (4.0 / 3.0)
-            let yOffset = (screenHeight - visibleHeight) / 2
-            return CGRect(x: 0, y: yOffset, width: screenWidth, height: visibleHeight)
-            
-        case .ratio1x1:
-            // Square - fills width, centered vertically
-            let size = screenWidth
-            let yOffset = (screenHeight - size) / 2
-            return CGRect(x: 0, y: yOffset, width: size, height: size)
-            
-        case .ratio16x9:
-            // 16:9 (9 wide x 16 tall) - fills width, with top/bottom bars
-            let visibleHeight = screenWidth * (16.0 / 9.0)
-            let yOffset = (screenHeight - visibleHeight) / 2
-            return CGRect(x: 0, y: yOffset, width: screenWidth, height: visibleHeight)
-        }
+        let targetRatio = aspectRatio.multiplier
+        let targetHeight = min(screenWidth * targetRatio, screenHeight)
+        let yOffset = (screenHeight - targetHeight) / 2
+        return CGRect(x: 0, y: yOffset, width: screenWidth, height: targetHeight)
     }
 }
 

@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import Speech
 import AVFoundation
 
 struct SettingsView: View {
@@ -7,8 +8,15 @@ struct SettingsView: View {
     @ObservedObject var cameraController: CameraController
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appearance_mode") private var appearanceMode: String = "Auto"
+    
+    private var selectedColorScheme: ColorScheme? {
+        switch appearanceMode {
+        case "Light": return .light
+        case "Dark": return .dark
+        default: return nil
+        }
+    }
     @State private var photoLibraryStatus: PHAuthorizationStatus = .notDetermined
     
     // Local state for defaults (independent of current session)
@@ -22,7 +30,7 @@ struct SettingsView: View {
             ZStack {
                 Color(.systemBackground)
                     .ignoresSafeArea()
-                
+
                 ScrollView {
                     VStack(spacing: 24) {
                         // Camera Defaults Section
@@ -173,6 +181,7 @@ struct SettingsView: View {
                                         set: { newValue in
                                             defaultShowGridLines = newValue
                                             cameraController.saveDefaultShowGridLines(newValue)
+                                            cameraController.showGridLines = newValue
                                         }
                                     ))
                                     .labelsHidden()
@@ -209,29 +218,6 @@ struct SettingsView: View {
                             }
                         }
                         
-                        // Audio Section
-                        SettingsSection(title: "AUDIO") {
-                            SettingsRow {
-                                HStack {
-                                    SettingsIconBox(icon: "speaker.wave.2.fill", color: Color(hex: "22c55e"))
-                                    
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Shutter Sound")
-                                            .font(.system(size: 16, weight: .medium))
-                                            .foregroundColor(.primary)
-                                        Text("Play sound when capturing")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(.secondary)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Toggle("", isOn: .constant(true))
-                                        .labelsHidden()
-                                        .tint(Color(hex: "22c55e"))
-                                }
-                            }
-                        }
                         
                         // Appearance Section
                         SettingsSection(title: "APPEARANCE") {
@@ -322,6 +308,7 @@ struct SettingsView: View {
             }
             .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .preferredColorScheme(selectedColorScheme)
         }
     }
     
@@ -339,7 +326,7 @@ struct SettingsView: View {
             return "Unknown"
         }
     }
-    
+
     private var photoLibraryStatusText: String {
         switch photoLibraryStatus {
         case .authorized:
@@ -412,6 +399,7 @@ struct SettingsView: View {
         
         // Load grid lines
         defaultShowGridLines = defaults.bool(forKey: "show_grid_lines")
+        cameraController.showGridLines = defaultShowGridLines
     }
 }
 
@@ -422,12 +410,12 @@ struct VoiceTriggerSettingsView: View {
     @ObservedObject var cameraController: CameraController
     @Environment(\.dismiss) private var dismiss
     @State private var editedPhrase: String = ""
-    @State private var audioDevices: [AudioDevice] = []
-    @State private var selectedDeviceID: String = "built-in"
     @State private var isEditing: Bool = false
     @State private var isTesting: Bool = false
     @State private var testResult: String = ""
+    @State private var wasListeningBeforeEntering: Bool = false
     @FocusState private var textFieldFocused: Bool
+    @StateObject private var testSession = VoiceTestSession()
     
     let suggestedPhrases = ["Say Cheese", "Smile", "Capture", "Take Photo", "Click", "Snap"]
     
@@ -529,14 +517,14 @@ struct VoiceTriggerSettingsView: View {
                         
                         // Microphone Source Section
                         SettingsSection(title: "MICROPHONE SOURCE") {
-                            ForEach(audioDevices, id: \.id) { device in
+                            ForEach(voiceViewModel.audioInputs, id: \.id) { device in
                                 Button {
-                                    selectedDeviceID = device.id
+                                    voiceViewModel.selectAudioInput(id: device.id)
                                 } label: {
                                     MicrophoneOption(
                                         title: device.name,
-                                        subtitle: device.type,
-                                        isSelected: selectedDeviceID == device.id
+                                        subtitle: device.kind.rawValue,
+                                        isSelected: voiceViewModel.selectedAudioInputID == device.id
                                     )
                                 }
                             }
@@ -606,21 +594,33 @@ struct VoiceTriggerSettingsView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .onAppear {
             editedPhrase = voiceViewModel.triggerPhrase
-            loadAudioDevices()
-            // Reset test state when view appears
+            voiceViewModel.refreshAudioInputs()
             testResult = ""
             isTesting = false
+            
+            // Stop the main voice listener to avoid audio session conflicts
+            wasListeningBeforeEntering = voiceViewModel.isListening
+            if voiceViewModel.isListening {
+                voiceViewModel.stopListening()
+            }
         }
         .onDisappear {
-            if isTesting {
-                stopTesting()
-            }
-            // Clear transcription when leaving
+            // Always stop the test session when leaving
+            testSession.stop()
+            isTesting = false
+            testResult = ""
             voiceViewModel.lastTranscription = nil
+            
+            // Restore the main listener if it was on before
+            if wasListeningBeforeEntering {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    voiceViewModel.startListening()
+                }
+            }
         }
-        .onReceive(voiceViewModel.$lastTranscription) { transcription in
-            if isTesting, let text = transcription, !text.isEmpty {
-                testResult = text
+        .onReceive(testSession.$transcription) { transcription in
+            if isTesting, !transcription.isEmpty {
+                testResult = transcription
             }
         }
     }
@@ -639,90 +639,112 @@ struct VoiceTriggerSettingsView: View {
     
     private func startTesting() {
         testResult = ""
-        voiceViewModel.lastTranscription = nil
-        voiceViewModel.isTestingMode = true  // Prevent photo capture during test
         isTesting = true
-        
-        // Restart voice recognition to get fresh transcription
-        if voiceViewModel.isListening {
-            voiceViewModel.stopListening()
-        }
-        
-        // Small delay then start fresh
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            voiceViewModel.startListening()
-        }
+        testSession.start()
     }
     
     private func stopTesting() {
+        testSession.stop()
         isTesting = false
-        voiceViewModel.isTestingMode = false  // Re-enable photo capture
         testResult = ""
-        voiceViewModel.lastTranscription = nil
-    }
-    
-    private func loadAudioDevices() {
-        var devices: [AudioDevice] = []
-        
-        // Always add built-in microphone
-        devices.append(AudioDevice(
-            id: "built-in",
-            name: "iPhone Microphone",
-            type: "Built-in",
-            portType: .builtInMic
-        ))
-        
-        // Get current audio route
-        let audioSession = AVAudioSession.sharedInstance()
-        
-        // Check available inputs
-        if let availableInputs = audioSession.availableInputs {
-            for input in availableInputs {
-                // Skip built-in mic as we already added it
-                if input.portType == .builtInMic {
-                    continue
-                }
-                
-                let deviceType: String
-                switch input.portType {
-                case .bluetoothHFP, .bluetoothA2DP, .bluetoothLE:
-                    deviceType = "Bluetooth"
-                case .headsetMic:
-                    deviceType = "Wired Headphones"
-                case .usbAudio:
-                    deviceType = "USB Audio"
-                default:
-                    deviceType = "External"
-                }
-                
-                devices.append(AudioDevice(
-                    id: input.uid,
-                    name: input.portName,
-                    type: deviceType,
-                    portType: input.portType
-                ))
-            }
-        }
-        
-        audioDevices = devices
-        
-        // Set current input as selected
-        if let currentInput = audioSession.currentRoute.inputs.first {
-            if currentInput.portType == .builtInMic {
-                selectedDeviceID = "built-in"
-            } else {
-                selectedDeviceID = currentInput.uid
-            }
-        }
     }
 }
 
-// Audio device model
-struct AudioDevice: Identifiable {
-    let id: String
-    let name: String
-    let type: String
-    let portType: AVAudioSession.Port
+private final class VoiceTestSession: NSObject, ObservableObject, SFSpeechRecognizerDelegate {
+    @Published var transcription: String = ""
+    @Published var isRunning: Bool = false
+    
+    private let audioEngine = AVAudioEngine()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private let speechRecognizer: SFSpeechRecognizer?
+    
+    override init() {
+        speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+        super.init()
+        speechRecognizer?.delegate = self
+    }
+    
+    func start() {
+        guard !isRunning else { return }
+        guard let speechRecognizer, speechRecognizer.isAvailable else { return }
+        
+        transcription = ""
+        
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .mixWithOthers])
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            
+            recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+            guard let recognitionRequest else { return }
+            recognitionRequest.shouldReportPartialResults = true
+            
+            let inputNode = audioEngine.inputNode
+            let recordingFormat = inputNode.inputFormat(forBus: 0)
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+                self?.recognitionRequest?.append(buffer)
+            }
+            
+            audioEngine.prepare()
+            try audioEngine.start()
+            isRunning = true
+            
+            recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+                guard let self else { return }
+                
+                if let result {
+                    DispatchQueue.main.async {
+                        self.transcription = result.bestTranscription.formattedString
+                    }
+                }
+                
+                if error != nil || result?.isFinal == true {
+                    // Auto-restart on transient errors
+                    if let error, self.isRunning {
+                        let desc = error.localizedDescription.lowercased()
+                        if desc.contains("no speech") || desc.contains("retry") {
+                            self.restart()
+                            return
+                        }
+                    }
+                }
+            }
+        } catch {
+            stop()
+        }
+    }
+    
+    func stop() {
+        isRunning = false
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        
+        DispatchQueue.main.async {
+            self.transcription = ""
+        }
+    }
+    
+    private func restart() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self, self.isRunning else { return }
+            self.start()
+        }
+    }
 }
 
 // MARK: - Helper Views

@@ -5,6 +5,8 @@ struct TopControlsBar: View {
     @ObservedObject var voiceViewModel: VoiceTriggerViewModel
     @Binding var showSettings: Bool
     let onVoiceToggle: () -> Void
+    let controlRotation: Angle
+    let topPadding: CGFloat
     
     @State private var isVisible = false
     @State private var settingsRotation: Double = 0
@@ -19,6 +21,8 @@ struct TopControlsBar: View {
             } label: {
                 FlashButton(mode: cameraController.flashMode)
             }
+            .rotationEffect(controlRotation)
+            .animation(.easeInOut(duration: 0.25), value: controlRotation)
             .opacity(isVisible ? 1 : 0)
             
             Spacer()
@@ -31,6 +35,8 @@ struct TopControlsBar: View {
             } label: {
                 AspectRatioButton(ratio: cameraController.aspectRatio.rawValue)
             }
+            .rotationEffect(controlRotation)
+            .animation(.easeInOut(duration: 0.25), value: controlRotation)
             .opacity(isVisible ? 1 : 0)
             
             Spacer()
@@ -43,6 +49,8 @@ struct TopControlsBar: View {
             } label: {
                 MicButton(isListening: voiceViewModel.isListening)
             }
+            .rotationEffect(controlRotation)
+            .animation(.easeInOut(duration: 0.25), value: controlRotation)
             .opacity(isVisible ? 1 : 0)
             
             Spacer()
@@ -55,6 +63,8 @@ struct TopControlsBar: View {
             } label: {
                 TimerButton(duration: cameraController.timerDuration)
             }
+            .rotationEffect(controlRotation)
+            .animation(.easeInOut(duration: 0.25), value: controlRotation)
             .opacity(isVisible ? 1 : 0)
             
             Spacer()
@@ -68,10 +78,12 @@ struct TopControlsBar: View {
             } label: {
                 IconButton(icon: "gearshape.fill", isActive: false)
             }
+            .rotationEffect(controlRotation)
+            .animation(.easeInOut(duration: 0.25), value: controlRotation)
             .opacity(isVisible ? 1 : 0)
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.top, topPadding)
         .onAppear {
             withAnimation(.easeOut(duration: 0.4).delay(0.1)) {
                 isVisible = true
@@ -92,7 +104,7 @@ struct AspectRatioButton: View {
         }
         .foregroundColor(.white)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .background(
             Capsule()
                 .fill(Color.black.opacity(0.4))
@@ -112,7 +124,7 @@ struct TimerButton: View {
         }
         .foregroundColor(duration != .off ? Color(hex: "f97316") : .white)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .background(
             Capsule()
                 .fill(Color.black.opacity(0.4))
@@ -132,7 +144,7 @@ struct FlashButton: View {
         }
         .foregroundColor(mode == .on ? Color(hex: "f97316") : .white)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .background(
             Capsule()
                 .fill(Color.black.opacity(0.4))
@@ -152,7 +164,7 @@ struct MicButton: View {
         }
         .foregroundColor(isListening ? Color(hex: "f97316") : .white)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
         .background(
             Capsule()
                 .fill(Color.black.opacity(0.4))
@@ -184,8 +196,11 @@ struct IconButton: View {
             TopControlsBar(
                 cameraController: CameraController(),
                 voiceViewModel: VoiceTriggerViewModel(),
-                showSettings: .constant(false)
-            ) {}
+                showSettings: .constant(false),
+                onVoiceToggle: {},
+                controlRotation: .zero,
+                topPadding: 12
+            )
             Spacer()
         }
     }

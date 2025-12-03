@@ -2,6 +2,7 @@
 .DS_Store
 build/
 DerivedData/
+DerivedDataPeriphery/
 *.xcuserstate
 *.xcworkspace/xcuserdata
 *.xcodeproj/xcuserdata/

@@ -10,7 +10,6 @@
 		1E88C8432F2C60A300A0B3C1 /* Sources/App/CameraMeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88C8382F2C60A300A0B3C1 /* Sources/App/CameraMeApp.swift */; };
 		1E88C8442F2C60A300A0B3C1 /* Sources/Audio/VoiceTriggerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88C8392F2C60A300A0B3C1 /* Sources/Audio/VoiceTriggerService.swift */; };
 		1E88C8452F2C60A300A0B3C1 /* Sources/Camera/CameraController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88C83A2F2C60A300A0B3C1 /* Sources/Camera/CameraController.swift */; };
-		1E88C8462F2C60A300A0B3C1 /* Sources/Countdown/CountdownCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88C83B2F2C60A300A0B3C1 /* Sources/Countdown/CountdownCoordinator.swift */; };
 		1E88C8472F2C60A300A0B3C1 /* Sources/Extensions/Publisher+Main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88C83C2F2C60A300A0B3C1 /* Sources/Extensions/Publisher+Main.swift */; };
 		1E88C8482F2C60A300A0B3C1 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1E88C83D2F2C60A300A0B3C1 /* Resources/Assets.xcassets */; };
 		1E88C8492F2C60A300A0B3C1 /* Resources/Sounds in Resources */ = {isa = PBXBuildFile; fileRef = 1E88C83E2F2C60A300A0B3C1 /* Resources/Sounds */; };
@@ -22,6 +21,11 @@
 		2E00000100000001 /* Sources/Extensions/Color+Hex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000001 /* Sources/Extensions/Color+Hex.swift */; };
 		2E00000100000002 /* Sources/Models/PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000002 /* Sources/Models/PermissionManager.swift */; };
 		2E00000100000003 /* Sources/Models/PhotoSaveStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000003 /* Sources/Models/PhotoSaveStatus.swift */; };
+		D0D10011 /* Sources/Components/CameraUIPlaceholders.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D0F101 /* Sources/Components/CameraUIPlaceholders.swift */; };
+		D0D10010 /* Sources/Audio/SoundEffectsPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D0F100 /* Sources/Audio/SoundEffectsPlayer.swift */; };
+		D0D10001 /* Sources/Models/VoicePermissionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D0F001 /* Sources/Models/VoicePermissionStatus.swift */; };
+		D0D10002 /* Sources/Models/AudioInputSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D0F002 /* Sources/Models/AudioInputSource.swift */; };
+		D0D10003 /* Sources/Models/DeviceOrientationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D0F003 /* Sources/Models/DeviceOrientationManager.swift */; };
 		2E00000100000004 /* Sources/Components/ShutterButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000004 /* Sources/Components/ShutterButton.swift */; };
 		2E00000100000005 /* Sources/Components/CameraControlsBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000005 /* Sources/Components/CameraControlsBar.swift */; };
 		2E00000100000006 /* Sources/Components/LensSelectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000006 /* Sources/Components/LensSelectorView.swift */; };
@@ -29,16 +33,11 @@
 		2E00000100000008 /* Sources/Components/AspectRatioOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000008 /* Sources/Components/AspectRatioOverlay.swift */; };
 		2E00000100000020 /* Sources/Components/GridOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000020 /* Sources/Components/GridOverlay.swift */; };
 		2E00000100000009 /* Sources/Components/TimerCountdownOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000009 /* Sources/Components/TimerCountdownOverlay.swift */; };
-		2E0000010000000A /* Sources/Components/VoiceTriggerComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0000020000000A /* Sources/Components/VoiceTriggerComponents.swift */; };
-		2E0000010000000B /* Sources/Components/PermissionCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0000020000000B /* Sources/Components/PermissionCards.swift */; };
-		2E00000100000013 /* Sources/Components/AnimationModifiers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000013 /* Sources/Components/AnimationModifiers.swift */; };
 		2E0000010000000C /* Sources/Views/RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0000020000000C /* Sources/Views/RootView.swift */; };
-		2E0000010000000D /* Sources/Views/PermissionRequestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0000020000000D /* Sources/Views/PermissionRequestView.swift */; };
-		2E0000010000000E /* Sources/Views/PermissionDeniedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0000020000000E /* Sources/Views/PermissionDeniedView.swift */; };
 		2E0000010000000F /* Sources/Views/CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0000020000000F /* Sources/Views/CameraView.swift */; };
-		2E00000100000010 /* Sources/Views/PhotoPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000010 /* Sources/Views/PhotoPreviewView.swift */; };
 		2E00000100000011 /* Sources/Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000011 /* Sources/Views/SettingsView.swift */; };
 		2E00000100000012 /* Sources/Camera/CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E00000200000012 /* Sources/Camera/CameraPreviewView.swift */; };
+		D0D10020 /* Sources/Views/OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0D0F020 /* Sources/Views/OnboardingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,7 +45,6 @@
 		1E88C8382F2C60A300A0B3C1 /* Sources/App/CameraMeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/App/CameraMeApp.swift; sourceTree = SOURCE_ROOT; };
 		1E88C8392F2C60A300A0B3C1 /* Sources/Audio/VoiceTriggerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Audio/VoiceTriggerService.swift; sourceTree = SOURCE_ROOT; };
 		1E88C83A2F2C60A300A0B3C1 /* Sources/Camera/CameraController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Camera/CameraController.swift; sourceTree = SOURCE_ROOT; };
-		1E88C83B2F2C60A300A0B3C1 /* Sources/Countdown/CountdownCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Countdown/CountdownCoordinator.swift; sourceTree = SOURCE_ROOT; };
 		1E88C83C2F2C60A300A0B3C1 /* Sources/Extensions/Publisher+Main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Extensions/Publisher+Main.swift"; sourceTree = SOURCE_ROOT; };
 		1E88C83D2F2C60A300A0B3C1 /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; };
 		1E88C83E2F2C60A300A0B3C1 /* Resources/Sounds */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Sounds; sourceTree = SOURCE_ROOT; };
@@ -59,6 +57,11 @@
 		2E00000200000001 /* Sources/Extensions/Color+Hex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/Extensions/Color+Hex.swift"; sourceTree = SOURCE_ROOT; };
 		2E00000200000002 /* Sources/Models/PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Models/PermissionManager.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000003 /* Sources/Models/PhotoSaveStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Models/PhotoSaveStatus.swift; sourceTree = SOURCE_ROOT; };
+		D0D0F101 /* Sources/Components/CameraUIPlaceholders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/CameraUIPlaceholders.swift; sourceTree = SOURCE_ROOT; };
+		D0D0F100 /* Sources/Audio/SoundEffectsPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Audio/SoundEffectsPlayer.swift; sourceTree = SOURCE_ROOT; };
+		D0D0F001 /* Sources/Models/VoicePermissionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Models/VoicePermissionStatus.swift; sourceTree = SOURCE_ROOT; };
+		D0D0F002 /* Sources/Models/AudioInputSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Models/AudioInputSource.swift; sourceTree = SOURCE_ROOT; };
+		D0D0F003 /* Sources/Models/DeviceOrientationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Models/DeviceOrientationManager.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000004 /* Sources/Components/ShutterButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/ShutterButton.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000005 /* Sources/Components/CameraControlsBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/CameraControlsBar.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000006 /* Sources/Components/LensSelectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/LensSelectorView.swift; sourceTree = SOURCE_ROOT; };
@@ -66,16 +69,11 @@
 		2E00000200000008 /* Sources/Components/AspectRatioOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/AspectRatioOverlay.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000020 /* Sources/Components/GridOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/GridOverlay.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000009 /* Sources/Components/TimerCountdownOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/TimerCountdownOverlay.swift; sourceTree = SOURCE_ROOT; };
-		2E0000020000000A /* Sources/Components/VoiceTriggerComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/VoiceTriggerComponents.swift; sourceTree = SOURCE_ROOT; };
-		2E0000020000000B /* Sources/Components/PermissionCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/PermissionCards.swift; sourceTree = SOURCE_ROOT; };
-		2E00000200000013 /* Sources/Components/AnimationModifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Components/AnimationModifiers.swift; sourceTree = SOURCE_ROOT; };
 		2E0000020000000C /* Sources/Views/RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views/RootView.swift; sourceTree = SOURCE_ROOT; };
-		2E0000020000000D /* Sources/Views/PermissionRequestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views/PermissionRequestView.swift; sourceTree = SOURCE_ROOT; };
-		2E0000020000000E /* Sources/Views/PermissionDeniedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views/PermissionDeniedView.swift; sourceTree = SOURCE_ROOT; };
 		2E0000020000000F /* Sources/Views/CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views/CameraView.swift; sourceTree = SOURCE_ROOT; };
-		2E00000200000010 /* Sources/Views/PhotoPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views/PhotoPreviewView.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000011 /* Sources/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views/SettingsView.swift; sourceTree = SOURCE_ROOT; };
 		2E00000200000012 /* Sources/Camera/CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Camera/CameraPreviewView.swift; sourceTree = SOURCE_ROOT; };
+		D0D0F020 /* Sources/Views/OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,7 +116,6 @@
 				1E88C8262F2C609800A0B3C1 /* Audio */,
 				1E88C8272F2C609800A0B3C1 /* Camera */,
 				2E00000300000001 /* Components */,
-				1E88C8282F2C609800A0B3C1 /* Countdown */,
 				1E88C8292F2C609800A0B3C1 /* Extensions */,
 				2E00000300000002 /* Models */,
 				2E00000300000003 /* Views */,
@@ -139,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				1E88C8392F2C60A300A0B3C1 /* Sources/Audio/VoiceTriggerService.swift */,
+				D0D0F100 /* Sources/Audio/SoundEffectsPlayer.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -150,14 +148,6 @@
 				2E00000200000012 /* Sources/Camera/CameraPreviewView.swift */,
 			);
 			path = Camera;
-			sourceTree = "<group>";
-		};
-		1E88C8282F2C609800A0B3C1 /* Countdown */ = {
-			isa = PBXGroup;
-			children = (
-				1E88C83B2F2C60A300A0B3C1 /* Sources/Countdown/CountdownCoordinator.swift */,
-			);
-			path = Countdown;
 			sourceTree = "<group>";
 		};
 		1E88C8292F2C609800A0B3C1 /* Extensions */ = {
@@ -179,9 +169,7 @@
 				2E00000200000008 /* Sources/Components/AspectRatioOverlay.swift */,
 				2E00000200000020 /* Sources/Components/GridOverlay.swift */,
 				2E00000200000009 /* Sources/Components/TimerCountdownOverlay.swift */,
-				2E0000020000000A /* Sources/Components/VoiceTriggerComponents.swift */,
-				2E0000020000000B /* Sources/Components/PermissionCards.swift */,
-				2E00000200000013 /* Sources/Components/AnimationModifiers.swift */,
+				D0D0F101 /* Sources/Components/CameraUIPlaceholders.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -191,6 +179,9 @@
 			children = (
 				2E00000200000002 /* Sources/Models/PermissionManager.swift */,
 				2E00000200000003 /* Sources/Models/PhotoSaveStatus.swift */,
+				D0D0F003 /* Sources/Models/DeviceOrientationManager.swift */,
+				D0D0F001 /* Sources/Models/VoicePermissionStatus.swift */,
+				D0D0F002 /* Sources/Models/AudioInputSource.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -199,11 +190,9 @@
 			isa = PBXGroup;
 			children = (
 				2E0000020000000C /* Sources/Views/RootView.swift */,
-				2E0000020000000D /* Sources/Views/PermissionRequestView.swift */,
-				2E0000020000000E /* Sources/Views/PermissionDeniedView.swift */,
 				2E0000020000000F /* Sources/Views/CameraView.swift */,
-				2E00000200000010 /* Sources/Views/PhotoPreviewView.swift */,
 				2E00000200000011 /* Sources/Views/SettingsView.swift */,
+				D0D0F020 /* Sources/Views/OnboardingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -308,12 +297,16 @@
 				1E88C8432F2C60A300A0B3C1 /* Sources/App/CameraMeApp.swift in Sources */,
 				1E88C8442F2C60A300A0B3C1 /* Sources/Audio/VoiceTriggerService.swift in Sources */,
 				1E88C8452F2C60A300A0B3C1 /* Sources/Camera/CameraController.swift in Sources */,
-				1E88C8462F2C60A300A0B3C1 /* Sources/Countdown/CountdownCoordinator.swift in Sources */,
 				1E88C8472F2C60A300A0B3C1 /* Sources/Extensions/Publisher+Main.swift in Sources */,
 				1E88C84D2F2C60A300A0B3C1 /* Sources/App/VoiceTriggerViewModel.swift in Sources */,
 				2E00000100000001 /* Sources/Extensions/Color+Hex.swift in Sources */,
 				2E00000100000002 /* Sources/Models/PermissionManager.swift in Sources */,
 				2E00000100000003 /* Sources/Models/PhotoSaveStatus.swift in Sources */,
+				D0D10003 /* Sources/Models/DeviceOrientationManager.swift in Sources */,
+				D0D10001 /* Sources/Models/VoicePermissionStatus.swift in Sources */,
+				D0D10002 /* Sources/Models/AudioInputSource.swift in Sources */,
+				D0D10011 /* Sources/Components/CameraUIPlaceholders.swift in Sources */,
+				D0D10010 /* Sources/Audio/SoundEffectsPlayer.swift in Sources */,
 				2E00000100000004 /* Sources/Components/ShutterButton.swift in Sources */,
 				2E00000100000005 /* Sources/Components/CameraControlsBar.swift in Sources */,
 				2E00000100000006 /* Sources/Components/LensSelectorView.swift in Sources */,
@@ -321,16 +314,11 @@
 				2E00000100000008 /* Sources/Components/AspectRatioOverlay.swift in Sources */,
 				2E00000100000020 /* Sources/Components/GridOverlay.swift in Sources */,
 				2E00000100000009 /* Sources/Components/TimerCountdownOverlay.swift in Sources */,
-				2E0000010000000A /* Sources/Components/VoiceTriggerComponents.swift in Sources */,
-				2E0000010000000B /* Sources/Components/PermissionCards.swift in Sources */,
 				2E0000010000000C /* Sources/Views/RootView.swift in Sources */,
-				2E0000010000000D /* Sources/Views/PermissionRequestView.swift in Sources */,
-				2E0000010000000E /* Sources/Views/PermissionDeniedView.swift in Sources */,
 				2E0000010000000F /* Sources/Views/CameraView.swift in Sources */,
-				2E00000100000010 /* Sources/Views/PhotoPreviewView.swift in Sources */,
 				2E00000100000011 /* Sources/Views/SettingsView.swift in Sources */,
 				2E00000100000012 /* Sources/Camera/CameraPreviewView.swift in Sources */,
-				2E00000100000013 /* Sources/Components/AnimationModifiers.swift in Sources */,
+				D0D10020 /* Sources/Views/OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

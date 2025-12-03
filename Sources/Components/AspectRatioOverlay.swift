@@ -5,25 +5,14 @@ struct AspectRatioOverlay: View {
     let geometry: GeometryProxy
     
     var body: some View {
-        // Use screen bounds for consistent sizing (original approach)
-        let screenBounds = UIScreen.main.bounds
-        let screenWidth = screenBounds.width
-        let screenHeight = screenBounds.height
+        let screenWidth = geometry.size.width
+        let screenHeight = geometry.size.height
         
         // Target aspect ratio (height/width)
-        let targetRatio: CGFloat
-        switch aspectRatio {
-        case .ratio4x3:
-            // 4:3 (3 wide x 4 tall in portrait)
-            targetRatio = 4.0 / 3.0
-        case .ratio1x1:
-            targetRatio = 1.0           // Square (unchanged)
-        case .ratio16x9:
-            targetRatio = 16.0 / 9.0    // 9 wide × 16 tall
-        }
+        let targetRatio = aspectRatio.multiplier
         
-        // Calculate visible area - fills screen width, centered vertically
-        let visibleHeight = screenWidth * targetRatio
+        // Calculate visible area - fills width, centered vertically, never adding side bars
+        let visibleHeight = min(screenWidth * targetRatio, screenHeight)
         let barHeight = max(0, (screenHeight - visibleHeight) / 2)
         
         return ZStack {

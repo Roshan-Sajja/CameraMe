@@ -6,11 +6,6 @@ import UIKit
 
 struct CaptureResult {
     let imageData: Data
-    let livePhotoMovieURL: URL?
-    
-    var isLivePhoto: Bool {
-        livePhotoMovieURL != nil
-    }
 }
 
 // MARK: - Camera Enums
@@ -35,6 +30,7 @@ enum CameraLens: String, CaseIterable {
     case ultraWide = "0.5x"
     case wide = "1x"
     case telephoto2x = "2x"
+    case telephoto3x = "3x"
     case telephoto5x = "5x"
     
     var systemZoomFactor: CGFloat {
@@ -42,6 +38,7 @@ enum CameraLens: String, CaseIterable {
         case .ultraWide: return 0.5
         case .wide: return 1.0
         case .telephoto2x: return 2.0
+        case .telephoto3x: return 3.0
         case .telephoto5x: return 5.0
         }
     }
@@ -50,8 +47,7 @@ enum CameraLens: String, CaseIterable {
         switch self {
         case .ultraWide: return .builtInUltraWideCamera
         case .wide: return .builtInWideAngleCamera
-        case .telephoto2x: return .builtInTelephotoCamera
-        case .telephoto5x: return .builtInTelephotoCamera
+        case .telephoto2x, .telephoto3x, .telephoto5x: return .builtInTelephotoCamera
         }
     }
 }
@@ -136,11 +132,6 @@ final class CameraController: NSObject, ObservableObject {
     @Published var flashMode: FlashMode = .auto
     @Published var aspectRatio: AspectRatio = .ratio4x3
     @Published var timerDuration: TimerDuration = .off
-    @Published var isLivePhotoEnabled = false {
-        didSet {
-            updateLivePhotoCaptureEnabled()
-        }
-    }
     @Published var zoomFactor: CGFloat = 1.0
     @Published var availableLenses: [CameraLens] = [.wide]
     @Published var minZoom: CGFloat = 1.0
@@ -157,9 +148,8 @@ final class CameraController: NSObject, ObservableObject {
     private let photoOutput = AVCapturePhotoOutput()
     private var pendingPhotoCompletion: ((Result<CaptureResult, Error>) -> Void)?
     private var timerWorkItem: DispatchWorkItem?
-    private var pendingPhotoData: Data?
-    private var pendingLivePhotoURL: URL?
-    private var isCapturingLivePhoto = false
+    private var currentVideoOrientation: AVCaptureVideoOrientation = .portrait
+    private var didPlayShutterSound = false
     
     let previewLayer: AVCaptureVideoPreviewLayer
     
@@ -169,16 +159,12 @@ final class CameraController: NSObject, ObservableObject {
         currentInput?.device.hasFlash ?? false
     }
     
-    var supportsLivePhoto: Bool {
-        photoOutput.isLivePhotoCaptureSupported
-    }
-    
     // MARK: - Initialization
 
     override init() {
         previewLayer = AVCaptureVideoPreviewLayer(session: session)
-        // Use resizeAspect to show exactly what will be captured (no cropping)
-        previewLayer.videoGravity = .resizeAspect
+        // Fill the visible region and avoid side letterboxing when aspect ratios change
+        previewLayer.videoGravity = .resizeAspectFill
         
         super.init()
         
@@ -254,6 +240,7 @@ final class CameraController: NSObject, ObservableObject {
             }
             
             self.session.startRunning()
+            self.applyCurrentOrientationLocked()
             
             DispatchQueue.main.async {
                 self.isSessionRunning = self.session.isRunning
@@ -324,6 +311,7 @@ final class CameraController: NSObject, ObservableObject {
             }
             
             self.session.commitConfiguration()
+            self.applyCurrentOrientationLocked()
             
             DispatchQueue.main.async {
                 self.cameraPosition = newPosition
@@ -413,6 +401,14 @@ final class CameraController: NSObject, ObservableObject {
         
         performCapture(completion: completion)
     }
+
+    func updateVideoOrientation(_ orientation: AVCaptureVideoOrientation) {
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.currentVideoOrientation = orientation
+            self.applyCurrentOrientationLocked()
+        }
+    }
     
     func cancelTimer() {
         timerWorkItem?.cancel()
@@ -431,6 +427,7 @@ final class CameraController: NSObject, ObservableObject {
         DispatchQueue.main.async {
             self.isTimerRunning = true
             self.timerCountdown = duration
+            SoundEffectsPlayer.shared.playTimerTick()
         }
         
         func tick(_ remaining: Int) {
@@ -445,6 +442,7 @@ final class CameraController: NSObject, ObservableObject {
             
             DispatchQueue.main.async {
                 self.timerCountdown = remaining
+                SoundEffectsPlayer.shared.playTimerTick()
             }
             
             let workItem = DispatchWorkItem { [weak self] in
@@ -461,10 +459,13 @@ final class CameraController: NSObject, ObservableObject {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             
-            // Reset pending state
-            self.pendingPhotoData = nil
-            self.pendingLivePhotoURL = nil
             self.pendingPhotoCompletion = completion
+            self.didPlayShutterSound = false
+            
+            if let connection = self.photoOutput.connection(with: .video),
+               connection.isVideoOrientationSupported {
+                connection.videoOrientation = self.currentVideoOrientation
+            }
             
             var settings = AVCapturePhotoSettings()
             
@@ -476,20 +477,11 @@ final class CameraController: NSObject, ObservableObject {
                 settings.maxPhotoDimensions = self.photoOutput.maxPhotoDimensions
             }
             
-            // Flash settings
             if let device = self.currentInput?.device, device.hasFlash {
                 settings.flashMode = self.flashMode.avFlashMode
             }
             
-            // Live Photo settings - must check isLivePhotoCaptureEnabled on output, not just supported
-            self.isCapturingLivePhoto = self.isLivePhotoEnabled && self.photoOutput.isLivePhotoCaptureEnabled
-            if self.isCapturingLivePhoto {
-                let livePhotoURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).mov")
-                settings.livePhotoMovieFileURL = livePhotoURL
-                print("🎥 Live Photo enabled, movie will be saved to: \(livePhotoURL)")
-            }
-            
-            print("🎥 Calling photoOutput.capturePhoto with flash: \(self.flashMode), livePhoto: \(self.isCapturingLivePhoto)")
+            print("🎥 Calling photoOutput.capturePhoto with flash: \(self.flashMode)")
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
@@ -519,15 +511,11 @@ final class CameraController: NSObject, ObservableObject {
         if session.outputs.isEmpty {
             if session.canAddOutput(photoOutput) {
                 session.addOutput(photoOutput)
-                // Only enable Live Photo capture if user has it enabled (saves battery)
-                photoOutput.isLivePhotoCaptureEnabled = isLivePhotoEnabled && photoOutput.isLivePhotoCaptureSupported
             }
-        } else {
-            // Update Live Photo setting if output already exists
-            photoOutput.isLivePhotoCaptureEnabled = isLivePhotoEnabled && photoOutput.isLivePhotoCaptureSupported
         }
         
         session.commitConfiguration()
+        applyCurrentOrientationLocked()
         
         DispatchQueue.main.async { [weak self] in
             self?.isCaptureReady = true
@@ -567,6 +555,23 @@ final class CameraController: NSObject, ObservableObject {
             print("🎥 Failed to configure device frame rate: \(error)")
         }
     }
+
+    private func applyCurrentOrientationLocked() {
+        let orientation = currentVideoOrientation
+        
+        if let photoConnection = photoOutput.connection(with: .video),
+           photoConnection.isVideoOrientationSupported {
+            photoConnection.videoOrientation = orientation
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let previewConnection = self.previewLayer.connection,
+               previewConnection.isVideoOrientationSupported {
+                previewConnection.videoOrientation = .portrait
+            }
+        }
+    }
     
     private func device(for position: CameraPosition, lens: CameraLens) -> AVCaptureDevice? {
         let discoverySession = AVCaptureDevice.DiscoverySession(
@@ -578,36 +583,64 @@ final class CameraController: NSObject, ObservableObject {
     }
     
     private func discoverAvailableLenses() {
-        var lenses: [CameraLens] = []
+        // Use the main back/front camera to read its zoom switch-over factors to determine actual lenses.
+        let baseDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: cameraPosition.avPosition)
         
-        // Check for ultra wide
-        if device(for: cameraPosition, lens: .ultraWide) != nil {
-            lenses.append(.ultraWide)
+        var lenses = Set<CameraLens>()
+        if baseDevice != nil {
+            lenses.insert(.wide)
         }
         
-        // Wide angle is always available
-        if device(for: cameraPosition, lens: .wide) != nil {
-            lenses.append(.wide)
+        // Ultra-wide availability
+        let ultraSession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInUltraWideCamera],
+            mediaType: .video,
+            position: cameraPosition.avPosition
+        )
+        if ultraSession.devices.contains(where: { $0.position == cameraPosition.avPosition }) {
+            lenses.insert(.ultraWide)
         }
         
-        // Check for telephoto and determine if it's 2x or 5x
-        if let telephotoDevice = device(for: cameraPosition, lens: .telephoto2x) {
-            // Check the device's virtual device switching zoom factors to determine actual zoom
-            let maxZoom = telephotoDevice.maxAvailableVideoZoomFactor
-            if maxZoom >= 5.0 {
-                lenses.append(.telephoto5x)
-            } else {
-                lenses.append(.telephoto2x)
+        // Telephoto options via switch-over zoom factors (more reliable than min/max zoom alone).
+        if let factors = baseDevice?.virtualDeviceSwitchOverVideoZoomFactors {
+            for factor in factors {
+                switch factor.doubleValue {
+                case ..<1.0:
+                    lenses.insert(.ultraWide)
+                case 1.5..<2.6:
+                    lenses.insert(.telephoto2x)
+                case 2.6..<4.5:
+                    lenses.insert(.telephoto3x)
+                default:
+                    lenses.insert(.telephoto5x)
+                }
+            }
+        } else {
+            // Fallback: inspect telephoto devices directly.
+            let teleDiscovery = AVCaptureDevice.DiscoverySession(
+                deviceTypes: [.builtInTelephotoCamera],
+                mediaType: .video,
+                position: cameraPosition.avPosition
+            )
+            for device in teleDiscovery.devices where device.position == cameraPosition.avPosition {
+                let minZoom = device.minAvailableVideoZoomFactor
+                if minZoom >= 4.5 {
+                    lenses.insert(.telephoto5x)
+                } else if minZoom >= 2.5 {
+                    lenses.insert(.telephoto3x)
+                } else {
+                    lenses.insert(.telephoto2x)
+                }
             }
         }
         
-        // Always have at least wide angle
         if lenses.isEmpty {
-            lenses = [.wide]
+            lenses.insert(.wide)
         }
         
-        DispatchQueue.main.async {
-            self.availableLenses = lenses
+        let sorted = lenses.sorted { $0.systemZoomFactor < $1.systemZoomFactor }
+        DispatchQueue.main.async { [weak self] in
+            self?.availableLenses = sorted
         }
     }
     
@@ -620,13 +653,6 @@ final class CameraController: NSObject, ObservableObject {
         }
     }
     
-    private func updateLivePhotoCaptureEnabled() {
-        sessionQueue.async { [weak self] in
-            guard let self = self else { return }
-            self.photoOutput.isLivePhotoCaptureEnabled = self.isLivePhotoEnabled && self.photoOutput.isLivePhotoCaptureSupported
-            print("🎥 Live Photo capture enabled: \(self.photoOutput.isLivePhotoCaptureEnabled)")
-        }
-    }
 }
 
 // MARK: - Errors
@@ -654,14 +680,12 @@ extension CameraController {
 
 extension CameraController: AVCapturePhotoCaptureDelegate {
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        print("🎥 didFinishProcessingPhoto called, isCapturingLivePhoto: \(isCapturingLivePhoto)")
+        print("🎥 didFinishProcessingPhoto called")
         
         if let error = error {
             print("🎥 Photo capture error: \(error.localizedDescription)")
             let completion = pendingPhotoCompletion
             pendingPhotoCompletion = nil
-            pendingPhotoData = nil
-            isCapturingLivePhoto = false
             DispatchQueue.main.async {
                 completion?(.failure(error))
             }
@@ -672,8 +696,6 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
             print("🎥 No image data!")
             let completion = pendingPhotoCompletion
             pendingPhotoCompletion = nil
-            pendingPhotoData = nil
-            isCapturingLivePhoto = false
             DispatchQueue.main.async {
                 completion?(.failure(CameraError.noImageData))
             }
@@ -682,37 +704,27 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
         
         print("🎥 Photo captured successfully, size: \(imageData.count) bytes")
         
-        // If capturing Live Photo, store the data and wait for movie
-        if isCapturingLivePhoto {
-            pendingPhotoData = imageData
-            print("🎥 Stored photo data, waiting for Live Photo movie...")
-        } else {
-            // Not Live Photo, complete immediately
-            let completion = pendingPhotoCompletion
-            pendingPhotoCompletion = nil
-            DispatchQueue.main.async {
-                let result = CaptureResult(imageData: imageData, livePhotoMovieURL: nil)
-                completion?(.success(result))
+        if !didPlayShutterSound {
+            let hasDeviceFlash = currentInput?.device.hasFlash ?? false
+            let flashActive = hasDeviceFlash && (flashMode == .on || flashMode == .auto)
+            let isFrontCamera = currentInput?.device.position == .front
+            
+            if !flashActive && !isFrontCamera {
+                DispatchQueue.main.async {
+                    SoundEffectsPlayer.shared.playShutter()
+                }
             }
+            didPlayShutterSound = true
         }
-    }
-    
-    // Required delegate method for Live Photo capture
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingLivePhotoToMovieFileAt outputFileURL: URL, duration: CMTime, photoDisplayTime: CMTime, resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
-        print("🎥 Live Photo movie finished processing at: \(outputFileURL)")
         
-        if let error = error {
-            print("🎥 Live Photo movie error: \(error.localizedDescription)")
-            // Still try to save the still photo
-            pendingLivePhotoURL = nil
-        } else {
-            // Store the movie URL - don't delete it yet, we need to save it
-            pendingLivePhotoURL = outputFileURL
-            print("🎥 Stored Live Photo movie URL")
+        let completion = pendingPhotoCompletion
+        pendingPhotoCompletion = nil
+        DispatchQueue.main.async {
+            let result = CaptureResult(imageData: imageData)
+            completion?(.success(result))
         }
     }
     
-    // Called when the entire capture is complete
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
         print("🎥 didFinishCaptureFor called")
         
@@ -720,34 +732,6 @@ extension CameraController: AVCapturePhotoCaptureDelegate {
             print("🎥 Capture finished with error: \(error.localizedDescription)")
         }
         
-        // If we were capturing a Live Photo, now we have both pieces
-        if isCapturingLivePhoto {
-            let completion = pendingPhotoCompletion
-            let photoData = pendingPhotoData
-            let movieURL = pendingLivePhotoURL
-            
-            // Reset state
-            pendingPhotoCompletion = nil
-            pendingPhotoData = nil
-            pendingLivePhotoURL = nil
-            isCapturingLivePhoto = false
-            
-            guard let imageData = photoData else {
-                DispatchQueue.main.async {
-                    completion?(.failure(CameraError.noImageData))
-                }
-                // Clean up movie file if it exists
-                if let url = movieURL {
-                    try? FileManager.default.removeItem(at: url)
-                }
-                return
-            }
-            
-            print("🎥 Completing Live Photo capture with photo + movie")
-            DispatchQueue.main.async {
-                let result = CaptureResult(imageData: imageData, livePhotoMovieURL: movieURL)
-                completion?(.success(result))
-            }
-        }
+        didPlayShutterSound = false
     }
 }
