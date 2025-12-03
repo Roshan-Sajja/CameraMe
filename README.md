@@ -3,7 +3,7 @@
 Voice-activated countdown camera proof-of-concept for iOS. The app continuously listens for a configurable phrase (default: **“camera me”**), starts a 5-second animated countdown with beeps, then captures and saves a photo with a shutter sound using the active camera (front by default). Works with device and accessory mics (e.g., AirPods) and dynamically shows only available lenses (0.5x/1x/2x/3x/5x).
 
 ## Developer Account Note
-The app needs camera, microphone, speech, and photo-library permissions on device. Sign the target with an Apple Developer account to run on hardware. If you need account access, choose either reimbursement for your own account or use credentials we provide.
+The app needs camera, microphone, speech, and photo-library permissions on device. Sign the target with an Apple Developer account to run on hardware.
 
 ## Requirements
 - Xcode 15 or newer (Swift 5.9+)
