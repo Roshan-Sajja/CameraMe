@@ -27,15 +27,6 @@ The app needs camera, microphone, speech, and photo-library permissions on devic
 - **Save:** Captured photo is written to Photos (add-only permission).
 - **Speech test:** Use the mic button to start/stop listening and verify recognition status; change the trigger phrase to validate speech recognition.
 
-## Validation Checklist (assignment-aligned)
-- Launch prompts for microphone and speech permissions; Photos add-only requested on first save.
-- Saying the trigger phrase starts the 5s countdown (with animation + beep each second).
-- Shutter sound at the end; photo saved to camera roll.
-- Works with device mic and AirPods/headphones.
-- Trigger phrase is editable and persists.
-- Camera toggle and dynamic zoom options reflect available lenses.
-- Flash, aspect ratio, grid, and timer controls respond as expected; timer honors 3s/5s/10s values.
-- Theme picker switches among Auto/Light/Dark; Auto mirrors the current system theme.
 
 ## Run/Build Options
 - **Standard build:** Run from Xcode on device after setting signing.
