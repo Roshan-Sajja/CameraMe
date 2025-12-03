@@ -239,6 +239,7 @@ struct CameraView: View {
                             },
                             cancelAction: {
                                 cameraController.cancelTimer()
+                                isCapturing = false
                             }
                         )
                         .rotationEffect(controlsRotation)
@@ -300,7 +301,7 @@ struct CameraView: View {
         isCapturing = true
         print("📷 isCapturing set to true")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [self] in
             if isCapturing {
                 print("📷 Safety timeout - resetting isCapturing")
                 isCapturing = false
@@ -598,9 +599,12 @@ private struct PhotoPreviewView: View {
             Button {
                 isPresented = false
             } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 32, weight: .bold))
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
                     .padding()
             }
         }

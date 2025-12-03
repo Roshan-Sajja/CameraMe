@@ -326,7 +326,7 @@ struct SettingsView: View {
             return "Unknown"
         }
     }
-
+    
     private var photoLibraryStatusText: String {
         switch photoLibraryStatus {
         case .authorized:
@@ -414,9 +414,11 @@ struct VoiceTriggerSettingsView: View {
     @State private var isTesting: Bool = false
     @State private var testResult: String = ""
     @State private var wasListeningBeforeEntering: Bool = false
+    @State private var validationError: String?
     @FocusState private var textFieldFocused: Bool
     @StateObject private var testSession = VoiceTestSession()
     
+    private let maxPhraseLength = 12
     let suggestedPhrases = ["Say Cheese", "Smile", "Capture", "Take Photo", "Click", "Snap"]
     
     var body: some View {
@@ -463,6 +465,7 @@ struct VoiceTriggerSettingsView: View {
                                     }
                                     
                                     if isEditing {
+                                        VStack(alignment: .leading, spacing: 6) {
                                         TextField("Enter phrase", text: $editedPhrase)
                                             .font(.system(size: 18, weight: .semibold))
                                             .foregroundColor(.primary)
@@ -470,8 +473,32 @@ struct VoiceTriggerSettingsView: View {
                                             .background(Color(.secondarySystemFill))
                                             .clipShape(RoundedRectangle(cornerRadius: 8))
                                             .focused($textFieldFocused)
+                                                .onChange(of: editedPhrase) { _, newValue in
+                                                    // Filter out symbols and limit length
+                                                    let filtered = String(newValue.unicodeScalars.filter {
+                                                        CharacterSet.letters.union(.whitespaces).contains($0)
+                                                    })
+                                                    let limited = String(filtered.prefix(maxPhraseLength))
+                                                    if limited != newValue {
+                                                        editedPhrase = limited
+                                                    }
+                                                    validationError = nil
+                                                }
                                             .onSubmit {
                                                 savePhrase()
+                                                }
+                                            
+                                            HStack {
+                                                if let error = validationError {
+                                                    Text(error)
+                                                        .font(.system(size: 12))
+                                                        .foregroundColor(.red)
+                                                }
+                                                Spacer()
+                                                Text("\(editedPhrase.count)/\(maxPhraseLength)")
+                                                    .font(.system(size: 12))
+                                                    .foregroundColor(editedPhrase.count >= maxPhraseLength ? .orange : .secondary)
+                                            }
                                             }
                                     } else {
                                         Text("\"\(voiceViewModel.triggerPhrase)\"")
@@ -627,14 +654,22 @@ struct VoiceTriggerSettingsView: View {
     
     private func savePhrase() {
         let trimmed = editedPhrase.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
+        let validation = SpeechVoiceTriggerService.validateTriggerPhrase(trimmed)
+        
+        if validation.isValid {
             voiceViewModel.triggerPhrase = trimmed
             voiceViewModel.handleTriggerPhraseChange()
+            validationError = nil
+            isEditing = false
+            textFieldFocused = false
         } else {
+            validationError = validation.error
+            if trimmed.isEmpty {
             editedPhrase = voiceViewModel.triggerPhrase
-        }
         isEditing = false
         textFieldFocused = false
+            }
+        }
     }
     
     private func startTesting() {
@@ -658,11 +693,55 @@ private final class VoiceTestSession: NSObject, ObservableObject, SFSpeechRecogn
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let speechRecognizer: SFSpeechRecognizer?
+    private var routeChangeObserver: Any?
+    private var isRestarting = false
     
     override init() {
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
         super.init()
         speechRecognizer?.delegate = self
+        observeRouteChanges()
+    }
+    
+    deinit {
+        if let routeChangeObserver {
+            NotificationCenter.default.removeObserver(routeChangeObserver)
+        }
+    }
+    
+    private func observeRouteChanges() {
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let self, self.isRunning else { return }
+            self.handleRouteChange(notification)
+        }
+    }
+    
+    private func handleRouteChange(_ notification: Notification) {
+        guard let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
+        
+        switch reason {
+        case .newDeviceAvailable, .oldDeviceUnavailable, .routeConfigurationChange:
+            // Stop current recognition immediately
+            recognitionTask?.cancel()
+            recognitionTask = nil
+            recognitionRequest?.endAudio()
+            recognitionRequest = nil
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            
+            // Delay to allow audio route to fully switch
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+                guard let self, self.isRunning, !self.isRestarting else { return }
+                self.restart()
+            }
+        default:
+            break
+        }
     }
     
     func start() {
@@ -673,8 +752,17 @@ private final class VoiceTestSession: NSObject, ObservableObject, SFSpeechRecogn
         
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .mixWithOthers])
+            
+            // Deactivate first to allow clean reconfiguration
+            try? session.setActive(false, options: .notifyOthersOnDeactivation)
+            
+            try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
+            
+            // Reset audio engine for new route
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            audioEngine.reset()
             
             recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
             guard let recognitionRequest else { return }
@@ -682,6 +770,15 @@ private final class VoiceTestSession: NSObject, ObservableObject, SFSpeechRecogn
             
             let inputNode = audioEngine.inputNode
             let recordingFormat = inputNode.inputFormat(forBus: 0)
+            
+            guard recordingFormat.sampleRate > 0 else {
+                // Invalid format, likely audio route not ready
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.start()
+                }
+                return
+            }
+            
             inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
                 self?.recognitionRequest?.append(buffer)
             }
@@ -733,6 +830,9 @@ private final class VoiceTestSession: NSObject, ObservableObject, SFSpeechRecogn
     }
     
     private func restart() {
+        guard !isRestarting else { return }
+        isRestarting = true
+        
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest?.endAudio()
@@ -741,7 +841,9 @@ private final class VoiceTestSession: NSObject, ObservableObject, SFSpeechRecogn
         audioEngine.inputNode.removeTap(onBus: 0)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self, self.isRunning else { return }
+            guard let self else { return }
+            self.isRestarting = false
+            guard self.isRunning else { return }
             self.start()
         }
     }

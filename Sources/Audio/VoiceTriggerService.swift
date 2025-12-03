@@ -247,11 +247,16 @@ final class SpeechVoiceTriggerService: NSObject, VoiceTriggerService, SFSpeechRe
 
     func selectPreferredInput(id: String?) {
         preferredInputID = id
-        refreshAudioRoute()
-
+        
+        // Apply the input change immediately if session is running
         if isSessionRunning {
-            scheduleRecognitionRestart()
+            sessionQueue.async { [weak self] in
+                guard let self, !self.isRestarting else { return }
+                self.restartRecognition(resetAudio: true)
+            }
         }
+        
+        refreshAudioRoute()
     }
 }
 
@@ -295,6 +300,32 @@ struct DisabledVoiceTriggerService: VoiceTriggerService {
     func selectPreferredInput(id: String?) {}
 }
 
+extension SpeechVoiceTriggerService {
+    static func validateTriggerPhrase(_ phrase: String) -> (isValid: Bool, error: String?) {
+        let trimmed = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if trimmed.isEmpty {
+            return (false, "Trigger phrase cannot be empty")
+        }
+        
+        if trimmed.count > 12 {
+            return (false, "Trigger phrase must be 12 characters or less")
+        }
+        
+        if trimmed.count < 2 {
+            return (false, "Trigger phrase must be at least 2 characters")
+        }
+        
+        // Only allow letters and spaces
+        let allowedCharacters = CharacterSet.letters.union(.whitespaces)
+        if trimmed.unicodeScalars.contains(where: { !allowedCharacters.contains($0) }) {
+            return (false, "Only letters and spaces are allowed")
+        }
+        
+        return (true, nil)
+    }
+}
+
 private extension SpeechVoiceTriggerService {
     static func normalizeTrigger(_ phrase: String) -> String {
         phrase
@@ -321,17 +352,24 @@ private extension SpeechVoiceTriggerService {
 
     func configureAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
+        
+        // Deactivate first to allow input changes
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        
         try session.setCategory(
             .playAndRecord,
-            mode: .videoRecording,
+            mode: .measurement,
             options: [.defaultToSpeaker, .allowBluetoothHFP, .allowBluetoothA2DP, .mixWithOthers]
         )
+        
+        // Set preferred input before activating
         if let preferredInputID,
            let preferredInput = session.availableInputs?.first(where: { $0.uid == preferredInputID }) {
             try session.setPreferredInput(preferredInput)
         } else {
             try? session.setPreferredInput(nil)
         }
+        
         try session.setActive(true, options: .notifyOthersOnDeactivation)
     }
 
@@ -407,6 +445,10 @@ private extension SpeechVoiceTriggerService {
         guard let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
 
+        #if DEBUG
+        print("🎤 Audio route change: \(reason.rawValue)")
+        #endif
+
         let shouldRestart: Bool
         switch reason {
         case .newDeviceAvailable, .oldDeviceUnavailable, .routeConfigurationChange:
@@ -417,29 +459,51 @@ private extension SpeechVoiceTriggerService {
             shouldRestart = false
         }
 
-        guard shouldRestart else {
+        guard shouldRestart, shouldAttemptRestart else {
             return
         }
 
+        // Mark that we're handling a route change to prevent error callbacks from interfering
+        isRestarting = true
+
+        // Stop current recognition immediately
         sessionQueue.async { [weak self] in
             guard let self else { return }
-            guard !self.isRestarting else { return }
+            self.recognitionTask?.cancel()
+            self.recognitionTask = nil
+            self.recognitionRequest?.endAudio()
+            self.recognitionRequest = nil
+            self.audioEngine.stop()
+            self.audioEngine.inputNode.removeTap(onBus: 0)
+        }
+
+        // Delay to allow audio route to fully switch before restarting recognition
+        sessionQueue.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self else { return }
+            guard self.shouldAttemptRestart else {
+                self.isRestarting = false
+                return
+            }
             self.restartRecognition(resetAudio: true)
         }
     }
 
     func restartRecognition(resetAudio: Bool) {
-        if isRestarting { return }
-        isRestarting = true
-        defer { isRestarting = false }
         do {
+            // Full audio engine reset
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+            audioEngine.reset()
+            
             try configureAudioSession()
             refreshAudioRoute()
             try startRecognitionLocked(resetAudio: resetAudio)
             isSessionRunning = true
+            isRestarting = false
             eventSubject.send(.started)
         } catch {
             isSessionRunning = false
+            isRestarting = false
             #if DEBUG
             print("Failed to restart speech recognition: \(error)")
             #endif
@@ -481,6 +545,9 @@ private extension SpeechVoiceTriggerService {
             }
 
             if let error = error {
+                // Don't update state if we're in the middle of a route change restart
+                guard !self.isRestarting else { return }
+                
                 self.isSessionRunning = false
 
                 #if DEBUG
@@ -490,12 +557,14 @@ private extension SpeechVoiceTriggerService {
                 let errorDesc = error.localizedDescription.lowercased()
                 let isTransientError = errorDesc.contains("no speech") ||
                                        errorDesc.contains("speech detected") ||
-                                       errorDesc.contains("retry")
+                                       errorDesc.contains("retry") ||
+                                       errorDesc.contains("cancelled")
                 if !isTransientError {
                     self.eventSubject.send(.failure(error))
                 }
                 self.scheduleRecognitionRestart()
             } else if result?.isFinal == true {
+                guard !self.isRestarting else { return }
                 self.isSessionRunning = false
                 self.scheduleRecognitionRestart()
             }
@@ -518,30 +587,78 @@ private extension SpeechVoiceTriggerService {
 
         let searchStartIndex = formatted.index(formatted.startIndex, offsetBy: lastMatchedCharacterCount)
         guard searchStartIndex < formatted.endIndex else { return }
-
-        guard let range = formatted.range(
-            of: normalizedTriggerPhrase,
-            options: [],
-            range: searchStartIndex..<formatted.endIndex,
-            locale: nil
-        ) else {
-            return
+        
+        let searchText = String(formatted[searchStartIndex...])
+        
+        // Check for exact match first
+        var matchEndIndex: String.Index?
+        if let range = searchText.range(of: normalizedTriggerPhrase) {
+            matchEndIndex = formatted.index(searchStartIndex, offsetBy: searchText.distance(from: searchText.startIndex, to: range.upperBound))
         }
+        
+        // Fuzzy matching: check for phonetic variations
+        if matchEndIndex == nil {
+            let variations = generatePhoneticVariations(for: normalizedTriggerPhrase)
+            for variation in variations {
+                if let range = searchText.range(of: variation) {
+                    matchEndIndex = formatted.index(searchStartIndex, offsetBy: searchText.distance(from: searchText.startIndex, to: range.upperBound))
+                    break
+                }
+            }
+        }
+        
+        // Check without spaces (words run together)
+        if matchEndIndex == nil {
+            let noSpaceTrigger = normalizedTriggerPhrase.replacingOccurrences(of: " ", with: "")
+            let noSpaceSearch = searchText.replacingOccurrences(of: " ", with: "")
+            if noSpaceSearch.contains(noSpaceTrigger) {
+                matchEndIndex = formatted.endIndex
+            }
+        }
+        
+        guard let endIndex = matchEndIndex else { return }
 
         let now = Date()
         if let lastTriggerDate, now.timeIntervalSince(lastTriggerDate) < triggerThrottle {
-            lastMatchedCharacterCount = formatted.distance(from: formatted.startIndex, to: range.upperBound)
+            lastMatchedCharacterCount = formatted.distance(from: formatted.startIndex, to: endIndex)
             return
         }
 
         lastTriggerDate = now
-        lastMatchedCharacterCount = formatted.distance(from: formatted.startIndex, to: range.upperBound)
+        lastMatchedCharacterCount = formatted.distance(from: formatted.startIndex, to: endIndex)
 
         #if DEBUG
         let snippet = transcription.formattedString
         print("Voice trigger heard (\(normalizedTriggerPhrase)) within transcription: \"\(snippet)\"")
         #endif
         subject.send(())
+    }
+    
+    private func generatePhoneticVariations(for phrase: String) -> [String] {
+        var variations: [String] = []
+        
+        // Common phonetic substitutions that work for any phrase
+        let phoneticSubstitutions: [(String, String)] = [
+            // Vowel variations
+            ("ee", "i"), ("ee", "ea"), ("i", "ee"), ("i", "y"),
+            ("a", "ah"), ("a", "uh"), ("e", "eh"), ("e", "i"),
+            ("o", "oh"), ("o", "aw"), ("u", "oo"),
+            // Consonant variations
+            ("c", "k"), ("k", "c"), ("ph", "f"), ("f", "ph"),
+            ("ck", "k"), ("ck", "c"),
+            // Common mishearings
+            ("er", "a"), ("er", "ur"), ("or", "er"),
+            ("th", "d"), ("th", "t"),
+        ]
+        
+        // Generate single-substitution variations
+        for (from, to) in phoneticSubstitutions {
+            if phrase.contains(from) {
+                variations.append(phrase.replacingOccurrences(of: from, with: to))
+            }
+        }
+        
+        return variations
     }
 
     func requestSpeechAuthorizationIfNeeded() -> SFSpeechRecognizerAuthorizationStatus {
