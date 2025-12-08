@@ -35,3 +35,4 @@ Carthage/Build/
 *.log
 .idea/
 .vscode/
+/Resources/Screenshots
