@@ -1,6 +1,9 @@
 # Voice Camera App
 
 Voice-activated countdown camera proof-of-concept for iOS. The app continuously listens for a configurable phrase (default: **“camera me”**), starts a 5-second animated countdown with beeps, then captures and saves a photo with a shutter sound using the active camera (front by default). Works with device and accessory mics (e.g., AirPods) and dynamically shows only available lenses (0.5x/1x/2x/3x/5x).
+Project website: https://camera-me.vercel.app/
+
+The site provides a brief overview of the app, feature highlights, and demo context for reviewers who want a quick product-level view without running the iOS build.
 
 ## Developer Account Note
 The app needs camera, microphone, speech, and photo-library permissions on device. Sign the target with an Apple Developer account to run on hardware.
